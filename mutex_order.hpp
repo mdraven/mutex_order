@@ -3,90 +3,90 @@
 #include <mutex>
 #include <type_traits>
 
-template<class Tag>
-class named_mutex : public std::mutex {};
+template<class Tag, class Mutex = std::mutex>
+class named_mutex : public Mutex {};
 
-template<class... NamedMutexes>
+template<class T, class... NamedMutexes>
 class mutex_order;
 
-template<class... NamedMutexes>
+// end_element
+struct end_element {};
+
+// named_mutex_index
+template<class MutexOrder, class NamedMutex>
+struct named_mutex_index;
+
+template<class T, class... NamedMutexes, class NamedMutex>
+struct named_mutex_index<mutex_order<T, NamedMutexes...>, NamedMutex> :
+    std::integral_constant<size_t, named_mutex_index<mutex_order<NamedMutexes...>, NamedMutex>::value + 1> {};
+
+template<class... NamedMutexes, class NamedMutex>
+struct named_mutex_index<mutex_order<NamedMutex, NamedMutexes...>, NamedMutex> : std::integral_constant<size_t, 0> {};
+
+template<class NamedMutex>
+struct named_mutex_index<mutex_order<NamedMutex>, end_element> : std::integral_constant<size_t, 1> {};
+
+// named_mutex_type
+template<class MutexOrder, size_t Index>
+struct named_mutex_type;
+
+template<class T, class... NamedMutexes, size_t Index>
+struct named_mutex_type<mutex_order<T, NamedMutexes...>, Index>
+    : named_mutex_type<mutex_order<NamedMutexes...>, Index-1> {};
+ 
+template<class T, class... NamedMutexes>
+struct named_mutex_type<mutex_order<T, NamedMutexes...>, 0> {
+   using type = T;
+};
+
+template<class T>
+struct named_mutex_type<mutex_order<T>, 0> {
+   using type = T;
+};
+
+template<class T, size_t Index>
+struct named_mutex_type<mutex_order<T>, Index> {
+   using type = end_element;
+};
+
+// mutex_order_slice
+template<class MutexOrder, class NamedMutex = end_element>
 class mutex_order_slice {
 public:
-    template<class... T>
-    mutex_order_slice(mutex_order_slice<T...>) {
-        static_assert(can_cut_all<mutex_order_slice<NamedMutexes...>, mutex_order_slice<T...>>::value, "Incorrect type");
+    template<class TNamedMutex>
+    mutex_order_slice(mutex_order_slice<MutexOrder, TNamedMutex>) {
+        static_assert(named_mutex_index<MutexOrder, NamedMutex>::value >= named_mutex_index<MutexOrder, TNamedMutex>::value, "Incorrect type");
     }
 
-    template<class Mutex, class Handler>
-    auto lock(Mutex &mut, Handler &&handler) {
-        std::lock_guard<Mutex> locker(mut);
-        return handler(shrink_slice<Mutex>());
+    template<class TNamedMutex, class Handler>
+    auto lock(TNamedMutex &mut, Handler &&handler) {
+        static_assert(named_mutex_index<MutexOrder, NamedMutex>::value >= named_mutex_index<MutexOrder, TNamedMutex>::value, "Incorrect type");
+        std::lock_guard<TNamedMutex> locker(mut);
+        using Type = typename named_mutex_type<MutexOrder, named_mutex_index<MutexOrder, TNamedMutex>::value + 1>::type;
+        return handler(mutex_order_slice<MutexOrder, Type>());
     }
 
 private:
-    template<class...>
+    template<class, class...>
     friend class mutex_order;
 
-    template<class...>
+    template<class, class>
     friend class mutex_order_slice;
 
     mutex_order_slice() = default;
-
-    // Выкидывает всё перед Elem и сам Elem
-    template<class Elem, class MutexOrderSlice>
-    struct cut;
-
-    template<class Elem, class Head, class... Tail>
-    struct cut<Elem, mutex_order_slice<Head, Tail...>> {
-        using c = cut<Elem, mutex_order_slice<Tail...>>;
-        using type = typename c::type;
-        static constexpr bool value = c::value;
-    };
-
-    template<class Elem, class... Other>
-    struct cut<Elem, mutex_order_slice<Elem, Other...>> {
-        using type = mutex_order_slice<Other...>;
-        static constexpr bool value = true;
-    };
-
-    template<class Elem>
-    struct cut<Elem, mutex_order_slice<>> {
-        using type = mutex_order_slice<>;
-        static constexpr bool value = false;
-    };
-
-    template<class Mutex>
-    typename cut<Mutex, mutex_order_slice<NamedMutexes...>>::type shrink_slice() {
-        static_assert(cut<Mutex, mutex_order_slice<NamedMutexes...>>::value, "Incorrect mutex type");
-        return {};
-    }
-
-    template<class MutexOrderSlice1, class MutexOrderSlice2>
-    struct can_cut_all {
-        static constexpr bool value = false;
-    };
-
-    template<class X, class... T, class MutexOrderSlice>
-    struct can_cut_all<mutex_order_slice<X, T...>, MutexOrderSlice> {
-        static constexpr bool value = cut<X, MutexOrderSlice>::value && can_cut_all<mutex_order_slice<T...>, typename cut<X, MutexOrderSlice>::type>::value;
-    };
-
-    template<class... W>
-    struct can_cut_all<mutex_order_slice<>, mutex_order_slice<W...>> {
-        static constexpr bool value = true;
-    };
 };
 
-template<>
-class mutex_order_slice<> {
+template<class MutexOrder>
+class mutex_order_slice<MutexOrder, end_element> {
 public:
-    // empty
+    template<class TNamedMutex>
+    mutex_order_slice(mutex_order_slice<MutexOrder, TNamedMutex>) {}
 };
 
-template<class... NamedMutexes>
+template<class T, class... NamedMutexes>
 class mutex_order {
 public:
-    static mutex_order_slice<NamedMutexes...> get() {
+    static mutex_order_slice<mutex_order<T, NamedMutexes...>, T> get() {
         return {};
     }
 };
