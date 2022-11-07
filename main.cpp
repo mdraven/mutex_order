@@ -1,22 +1,8 @@
-// Чтобы не было deadlock'ов мьютексы нужно всегда захватывать в нужном порядке. Чтобы этот порядок был
-// контролируем введём 2 сущности.
-// 1. уникальный тип для мьютекса, чтобы отличать один от другого:
-//   using MapMutex = named_mutex<struct map_mutex>;
-//   using MapElemMutex = named_mutex<struct map_elem_mutex>;
-// 2. тип который определяет в каком порядке можно захватывать мьютексы:
-//   using MutexOrder = mutex_order<MapMutex, MapElemMutex>;
-// Для 2 не обязательно чтобы захватывались все мьютексы из списка. И не обязательно чтобы не было дыр при захвате.
-// Главное, чтобы они захватывались в приведённом порядке.
-// Таким образом MutexOrder может быть один на всю программу и содержать все named_mutex.
-//
-
-
-// TODO: написать про случай с элементами из map в которых есть мьютекс. И о том, что данная штука для этого не применима
-// и надо делать по старинке через mutex.lock().
 
 #include <array>
-#include <map>
+#include <cassert>
 #include <functional>
+#include <map>
 
 #include "mutex_order.hpp"
 
@@ -33,8 +19,16 @@ class MapWithElems {
 public:
     int get(int key, mutex_order_slice<MapMutex, MapElemMutex> mo_slice) {
         using std::placeholders::_1;
-        using std::placeholders::_2;
         return mo_slice.lock(_mut, std::bind(&MapWithElems::get_from_map, this, key, _1));
+    }
+
+    template<class Handler, class... Mutexes>
+    int get_then(int key, mutex_order_slice<MapMutex, MapElemMutex, Mutexes...> mo_slice, Handler &&handler) {
+        return mo_slice.lock(_mut, [&](auto &&mo_slice) {
+            int value = get_from_map(key, mo_slice);
+            value += handler(mo_slice);
+            return value;
+        });
     }
 
 private:
@@ -59,5 +53,8 @@ private:
 int main() {
     MutexOrder order;
     MapWithElems map;
-    return map.get(1, order.get());
+    assert(map.get(1, order.get()) == 0);
+    assert(map.get_then(1, mutex_order_slice<MapMutex, MapElemMutex, CMutex>(order.get()), [](mutex_order_slice<CMutex> mo_slice) {
+        return 1;    
+    }) == 1);
 }
