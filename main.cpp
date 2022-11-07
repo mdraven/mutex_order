@@ -20,10 +20,14 @@
 
 #include "mutex_order.hpp"
 
+using AMutex  = named_mutex<struct a_mutex>;
+using BMutex  = named_mutex<struct b_mutex>;
+using CMutex  = named_mutex<struct c_mutex>;
+
 using MapMutex = named_mutex<struct map_mutex>;
 using MapElemMutex = named_mutex<struct map_elem_mutex>;
 
-using MutexOrder = mutex_order<MapMutex, MapElemMutex>;
+using MutexOrder = mutex_order<AMutex, MapMutex, BMutex, MapElemMutex, CMutex>;
 
 class MapWithElems {
 public:

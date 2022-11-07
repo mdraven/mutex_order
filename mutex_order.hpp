@@ -38,19 +38,30 @@ private:
 
     template<class Elem, class Head, class... Tail>
     struct cut<Elem, mutex_order_slice<Head, Tail...>> {
-        using type = typename cut<Elem, mutex_order_slice<Tail...>>::type;
+        using c = cut<Elem, mutex_order_slice<Tail...>>;
+        using type = typename c::type;
+        static constexpr bool value = c::value;
     };
 
     template<class Elem, class... Other>
     struct cut<Elem, mutex_order_slice<Elem, Other...>> {
         using type = mutex_order_slice<Other...>;
+        static constexpr bool value = true;
+    };
+
+    template<class Elem>
+    struct cut<Elem, mutex_order_slice<>> {
+        using type = mutex_order_slice<>;
+        static constexpr bool value = false;
     };
 
     template<class Mutex>
     typename cut<Mutex, mutex_order_slice<NamedMutexes...>>::type shrink_slice() {
+        static_assert(cut<Mutex, mutex_order_slice<NamedMutexes...>>::value, "Incorrect mutex type");
         return {};
     }
 
+/*
     template<class MutexOrderSlice1, class MutexOrderSlice2>
     struct can_cut_all {
         static constexpr bool value = false;
@@ -60,9 +71,35 @@ private:
     struct can_cut_all<mutex_order_slice<X, T...>, mutex_order_slice<W...>> {
         static constexpr bool value = can_cut_all<mutex_order_slice<T...>, typename cut<X, mutex_order_slice<W...>>::type>::value;
     };
-    //struct can_cut_all<mutex_order_slice<X, T...>, MutexOrderSlice> {
-    //    static constexpr bool value = can_cut_all<mutex_order_slice<T...>, typename cut<X, MutexOrderSlice>::type>::value;
-    //};
+
+    template<class... W>
+    struct can_cut_all<mutex_order_slice<>, mutex_order_slice<W...>> {
+        static constexpr bool value = true;
+    };
+*/
+/*
+    template<class MutexOrderSlice1, class MutexOrderSlice2>
+    struct can_cut_all;
+
+    template<class... T, class MutexOrderSlice>
+    struct can_cut_all<mutex_order_slice<T...>, MutexOrderSlice> {
+        static constexpr bool value = (cut<T, MutexOrderSlice>::value && ...);
+    };
+*/
+    template<class MutexOrderSlice1, class MutexOrderSlice2>
+    struct can_cut_all {
+        static constexpr bool value = false;
+    };
+
+    template<class X, class... T, class MutexOrderSlice>
+    struct can_cut_all<mutex_order_slice<X, T...>, MutexOrderSlice> {
+        static constexpr bool value = cut<X, MutexOrderSlice>::value && can_cut_all<mutex_order_slice<T...>, typename cut<X, MutexOrderSlice>::type>::value;
+    };
+
+    template<class... W>
+    struct can_cut_all<mutex_order_slice<>, mutex_order_slice<W...>> {
+        static constexpr bool value = true;
+    };
 };
 
 template<>
