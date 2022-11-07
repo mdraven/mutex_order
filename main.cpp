@@ -115,7 +115,7 @@ private:
     // Этот метод лежит в там же классе, что и get. Но на практике это могут быть методы разных объектов.
     int getFromMap(int key, mutex_order_slice<MapElemMutex> mo_slice) {
         auto &elem = _map[key];
-        auto value = mo_slice.lock(elem._mut, [&elem](mutex_order_slice<> mo_slice) -> int {
+        auto value = mo_slice.lock(elem._mut, [&elem](mutex_order_slice<>) -> int {
             return elem._value;
         });
         return value;
