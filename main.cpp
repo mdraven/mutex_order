@@ -16,79 +16,9 @@
 
 #include <array>
 #include <map>
-#include <mutex>
 #include <functional>
 
-template<class Tag>
-class named_mutex : public std::mutex {};
-
-template<class... NamedMutexes>
-class mutex_order;
-
-template<class... NamedMutexes>
-class mutex_order_slice {
-public:
-    template<class... SliceNamedMutexes>
-    mutex_order_slice(mutex_order_slice<SliceNamedMutexes...>) {
-        static_assert(can_cut_all<mutex_order_slice<NamedMutexes...>, mutex_order_slice<SliceNamedMutexes...>>::value, "Incorrect type");
-    }
-
-    template<class Mutex, class Handler>
-    auto lock(Mutex &mut, Handler &&handler) {
-        std::lock_guard<Mutex> locker(mut);
-        return handler(shrinkSlice<Mutex>());
-    }
-
-private:
-    template<class...>
-    friend class mutex_order;
-
-    template<class...>
-    friend class mutex_order_slice;
-
-    mutex_order_slice() = default;
-
-    // Выкидывает всё перед Elem и сам Elem
-    template<class Elem, class MutexOrderSlice>
-    struct cut;
-
-    template<class Elem, class Head, class... Tail>
-    struct cut<Elem, mutex_order_slice<Head, Tail...>> {
-        using type = typename cut<Elem, mutex_order_slice<Tail...>>::type;
-    };
-
-    template<class Elem, class... Other>
-    struct cut<Elem, mutex_order_slice<Elem, Other...>> {
-        using type = mutex_order_slice<Other...>;
-    };
-
-    template<class Mutex>
-    typename cut<Mutex, mutex_order_slice<NamedMutexes...>>::type shrinkSlice() {
-        return {};
-    }
-
-    template<class MutexOrderSlice1, class MutexOrderSlice2>
-    struct can_cut_all;
-
-    template<class MutexOrderSlice, class X, class... T>
-    struct can_cut_all<mutex_order_slice<X, T...>, MutexOrderSlice> {
-        static constexpr bool value = can_cut_all<mutex_order_slice<T...>, typename cut<X, MutexOrderSlice>::type>::value;
-    };
-};
-
-template<>
-class mutex_order_slice<> {
-public:
-    // empty
-};
-
-template<class... NamedMutexes>
-class mutex_order {
-public:
-    static mutex_order_slice<NamedMutexes...> get() {
-        return {};
-    }
-};
+#include "mutex_order.hpp"
 
 using MapMutex = named_mutex<struct map_mutex>;
 using MapElemMutex = named_mutex<struct map_elem_mutex>;
@@ -127,21 +57,3 @@ int main() {
     MapWithElems map;
     return map.get(1, order.get());
 }
-
-/*
-#include <string>
-
-#include <immer/map.hpp>
-
-int main()
-{
-    const auto v0 = immer::map<std::string, int>{};
-    const auto v1 = v0.set("hello", 42);
-    assert(v0["hello"] == 0);
-    assert(v1["hello"] == 42);
-
-    const auto v2 = v1.erase("hello");
-    assert(*v1.find("hello") == 42);
-    assert(!v2.find("hello"));
-}
-*/
