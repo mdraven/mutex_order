@@ -22,26 +22,47 @@
 template<class Tag>
 class named_mutex {};
 
-template<class... Tag>
-class mutex_order {};
-
-template<class MutexOrder, class NamedMutex = void>
+template<class... NamedMutexes>
 class mutex_order_slice {
 public:
+    template<class... SliceNamedMutexes>
+    mutex_order_slice(mutex_order_slice<SliceNamedMutexes...>);
+
     template<class Mutex, class Handler>
-    auto lock(Mutex &mut, Handler &&handler) -> int/*TODO: выводить тип из Handler*/ {
+    auto lock(Mutex &mut, Handler &&handler) {
         std::lock_guard<Mutex> locker(mut);
         return handler(shrinkSlice<Mutex>());
     }
 private:
+    // Выкидывает всё перед Elem и сам Elem
+    template<class Elem, class Head, class... Tail>
+    struct cut {
+        using type = typename cut<Elem, Tail...>::type;
+    };
+
+    template<class Elem, class... Other>
+    struct cut<Elem, Elem, Other...> {
+        using type = mutex_order_slice<Other...>;
+    };
+
     template<class Mutex>
-    auto shrinkSlice() -> mutex_order_slice<MutexOrder, >;
+    typename cut<Mutex, NamedMutexes...>::type shrinkSlice() {
+        return {};
+    }
 };
 
-template<class MutexOrder>
-class mutex_order_slice<MutexOrder, void> {
+template<>
+class mutex_order_slice<> {
 public:
     // empty
+};
+
+template<class... NamedMutexes>
+class mutex_order {
+public:
+    static mutex_order_slice<NamedMutexes...> get() {
+        return {};
+    }
 };
 
 using MapMutex = named_mutex<struct map_mutex>;
