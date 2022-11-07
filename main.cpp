@@ -12,7 +12,7 @@
 
 
 // TODO: написать про случай с элементами из map в которых есть мьютекс. И о том, что данная штука для этого не применима
-// и надо делать постаринке через mutex.lock().
+// и надо делать по старинке через mutex.lock().
 
 #include <array>
 #include <map>
@@ -34,7 +34,7 @@ public:
     int get(int key, mutex_order_slice<MapMutex, MapElemMutex> mo_slice) {
         using std::placeholders::_1;
         using std::placeholders::_2;
-        return mo_slice.lock(_mut, std::bind(&MapWithElems::getFromMap, this, key, _1));
+        return mo_slice.lock(_mut, std::bind(&MapWithElems::get_from_map, this, key, _1));
     }
 
 private:
@@ -47,7 +47,7 @@ private:
     std::map<int, Elem> _map;
 
     // Этот метод лежит в там же классе, что и get. Но на практике это могут быть методы разных объектов.
-    int getFromMap(int key, mutex_order_slice<MapElemMutex> mo_slice) {
+    int get_from_map(int key, mutex_order_slice<MapElemMutex> mo_slice) {
         auto &elem = _map[key];
         auto value = mo_slice.lock(elem._mut, [&elem](mutex_order_slice<>) -> int {
             return elem._value;

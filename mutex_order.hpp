@@ -61,31 +61,6 @@ private:
         return {};
     }
 
-/*
-    template<class MutexOrderSlice1, class MutexOrderSlice2>
-    struct can_cut_all {
-        static constexpr bool value = false;
-    };
-
-    template<class X, class... T, class... W>
-    struct can_cut_all<mutex_order_slice<X, T...>, mutex_order_slice<W...>> {
-        static constexpr bool value = can_cut_all<mutex_order_slice<T...>, typename cut<X, mutex_order_slice<W...>>::type>::value;
-    };
-
-    template<class... W>
-    struct can_cut_all<mutex_order_slice<>, mutex_order_slice<W...>> {
-        static constexpr bool value = true;
-    };
-*/
-/*
-    template<class MutexOrderSlice1, class MutexOrderSlice2>
-    struct can_cut_all;
-
-    template<class... T, class MutexOrderSlice>
-    struct can_cut_all<mutex_order_slice<T...>, MutexOrderSlice> {
-        static constexpr bool value = (cut<T, MutexOrderSlice>::value && ...);
-    };
-*/
     template<class MutexOrderSlice1, class MutexOrderSlice2>
     struct can_cut_all {
         static constexpr bool value = false;
