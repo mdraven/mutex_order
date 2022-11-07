@@ -49,6 +49,35 @@ struct named_mutex_type<mutex_order<T>, Index> {
    using type = end_element;
 };
 
+// has_named_mutex_type
+template<class MutexOrder, class NamedMutex>
+struct has_named_mutex_type;
+
+template<class T, class... NamedMutexes, class NamedMutex>
+struct has_named_mutex_type<mutex_order<T, NamedMutexes...>, NamedMutex> :
+    std::integral_constant<bool, has_named_mutex_type<mutex_order<NamedMutexes...>, NamedMutex>::value> {};
+
+template<class... NamedMutexes, class NamedMutex>
+struct has_named_mutex_type<mutex_order<NamedMutex, NamedMutexes...>, NamedMutex> :
+    std::integral_constant<bool, true> {};
+
+template<class NamedMutex, class T>
+struct has_named_mutex_type<mutex_order<NamedMutex>, T> : std::integral_constant<bool, false> {};
+
+template<class NamedMutex>
+struct has_named_mutex_type<mutex_order<NamedMutex>, end_element> : std::integral_constant<bool, true> {};
+
+// is_unique_named_mutexes
+template<class MutexOrder>
+struct is_unique_named_mutexes;
+
+template<class T, class U, class... NamedMutexes>
+struct is_unique_named_mutexes<mutex_order<T, U, NamedMutexes...>> :
+    std::integral_constant<bool, !has_named_mutex_type<mutex_order<U, NamedMutexes...>, T>::value && is_unique_named_mutexes<mutex_order<U, NamedMutexes...>>::value> {};
+
+template<class T>
+struct is_unique_named_mutexes<mutex_order<T>> : std::integral_constant<bool, true> {};
+
 // mutex_order_slice
 template<class MutexOrder, class NamedMutex = end_element>
 class mutex_order_slice {
@@ -85,6 +114,7 @@ public:
 
 template<class T, class... NamedMutexes>
 class mutex_order {
+    static_assert(is_unique_named_mutexes<mutex_order<T, NamedMutexes...>>::value, "Mutexes must be unique");
 public:
     static mutex_order_slice<mutex_order<T, NamedMutexes...>, T> get() {
         return {};
